@@ -36,9 +36,9 @@ mb128_send_bit:
 	rts
 ```
 If you are not familiar with assembly languages, the `mb128_send_bit` routine can be translated into the following timing diagram. **b** is the bit to send (either **0** or **1**). A dot **.** represent a wait cycle. Only 4 bits can be read through the joyport, and only 2 bits can be written to it.
-|           |          |     |          |           |          |  |
+
+| write     | 000b | ……… | 001b | ……………………… | 000b | ……… |
 |:---------:| -------- | --- | -------- | --------- | -------- | - |
-| **write** | 000**b** | ……… | 001**b** | ……………………… | 000**b** | ……… |
 | **read**  | 
 
 A byte is transferred by sending each bit starting from bit **0** to bit **7**. This can easily be done by repeatedly shifting the value to the right and sending the carry flag to the **mb128**. This can be translated in the following C-like pseudo-code.
@@ -70,9 +70,9 @@ mb128_read_bit:
     rts
 ```
 The associated timing diagram :
-|           |      |     |      |     |          |      |     | 
+
+| write | 0000 | ……… | 0010 | ……… |          | 0000 | ……… |
 |:---------:| ---- | --- | ---- | --- | -------- | ---- | --- |
-| **write** | 0000 | ……… | 0010 | ……… |          | 0000 | ……… |
 | **read**  |      |     |      |     | **abcd** |      
 
 Reading a byte is done just like its counterpart. A byte is read by performing
@@ -167,6 +167,7 @@ for( b=0; b<sector_count; b++ ) {
 ## Header format
 The first **2** sectors (**1024** bytes) of the **mb128** holds what can be describe as an entry list. Each entry is **16** bytes long. This means that the those sector can hold **64** entries.
 The first entry contains the header. It is organized as follow :
+
  offset | purpose 
  -:|:-
  0 | CRC (lsb)
@@ -180,6 +181,7 @@ The first entry contains the header. It is organized as follow :
 The Header **CRC** is the sum of the bytes **0x02** to **0x3ff**. Some games (**Shin Megami Tensei** for example) keep bytes **2** and **3** at **zero**.
 
 Next comes the savegame entries. 
+
  offset | purpose 
 -:|:-
  0 | sector number
