@@ -261,11 +261,11 @@ mb128_boot:
 ;;---------------------------------------------------------------------
 ; Set internal memory base 128 address to the specified sector.
 ; in  : _bl Sector number
+;         A 1 for read and 0 write
 ; out :
 ; use : _al
 ;;---------------------------------------------------------------------
 mb128_sector_addr:
-	lda #$01
 	jsr mb128_send_bit
 
 	cla
@@ -305,6 +305,7 @@ mb128_write_sectors:
 		jsr mb128_detect
 		cmp #$00
 		bne .error
+        cla
 		jsr mb128_sector_addr	
 		ldx #$02
 .write_next_256:
@@ -326,6 +327,7 @@ mb128_write_sectors:
 		jsr mb128_detect
 		cmp #$00
 		bne .error
+        lda #$01
 		jsr mb128_sector_addr
 		ldx #$02
 .check_next_256:
@@ -373,6 +375,7 @@ mb128_clear_sectors:
 		jsr mb128_detect
 		cmp #$00
 		bne .error
+        cla
 		jsr mb128_sector_addr	
 		ldx #$02
 .clear_next_256:
@@ -390,6 +393,7 @@ mb128_clear_sectors:
 		jsr mb128_detect
 		cmp #$00
 		bne .error
+        lda #$01
 		jsr mb128_sector_addr
 		ldx #$02
 .check_next_256:
@@ -435,6 +439,7 @@ mb128_read_sectors:
 		jsr mb128_detect
 		cmp #$00
 		bne .error
+        lda #$01
 		jsr mb128_sector_addr	
 		ldx #$02
 .read_next_256:
