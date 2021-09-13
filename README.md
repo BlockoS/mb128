@@ -279,7 +279,8 @@ The format of the data stored is not standardized. This means that they are
 game dependent. For example, it seems that **Tadaima Yusha Boshuuchuu** is using the **mb128** as an extra **BRAM**. On the other hand, **Shin Megami Tensei** has its own internal format.
 
 ## Thanks 🚧
-
+David Shadoff
+Elmer
 
 ## Contact
 mooz at blockos dot org
