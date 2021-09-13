@@ -108,74 +108,118 @@ bool mb128_detect() {
 ```
 A **mb128** is plugged to the joyport if **res** is equal to **4**. Some games make **3** attempts before calling it quits
 
-## Boot 🚧
+## Boots
 
 At startup just after detection, a special sequence is performed. It can be viewed as a boot/reset sequence.
 ```c
-mb128_boot:
-mb128_send_bit( 1 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
+void mb128_boot() {
+    mb128_send_bit( 1 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
 
-mb128_send_byte( 0x00 );
-mb128_send_byte( 0x01 );
-mb128_send_byte( 0x00 );
+    mb128_send_byte( 0x00 );
+    mb128_send_byte( 0x01 );
+    mb128_send_byte( 0x00 );
 
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
 
-mb128_read_bit();
+    mb128_read_bit();
 
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+}
 ```
 Once `mb128_detect` and `mb128_boot` are performed, you can safely read or write data to the **mb128** storage.
-
-## Sector read/write 🚧
-All games studied store or retrieve data by blocs of **512** bytes. A bloc is called a sector.
-The first thing to do is to tell the **mb128 **which sector is being processed. As the **mb128** can stored up to **128KB**, there are **256** (`0x100`) available sectors. The sequence sent is similar to the one sent for a boot sequence (`mb128_boot`).
+We'll call this `mb128_reset`, and it usually looks like this:
 ```c
-mb128_sector_addr:
-mb128_send_bit( 1 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-
-mb128_send_byte( sector_id );
-mb128_send_byte( 0x00 );
-mb128_send_byte( 0x10 );
-
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
-mb128_send_bit( 0 );
+bool mb128_reset() {
+    int i;
+    for(i=0; i<8; i++) {
+        if(mb128_detect()) {
+            break;
+        }
+    }
+    if(i == 8) {                        // failed to detect any mb128
+        return false;
+    }
+    mb128_boot();                       // issue the "boot" sequence and
+    return true;
+}
 ```
+
+## Sector read/write
+All games studied store or retrieve data by blocs of **512** bytes. We will call it a sector.
+The first thing to do is to tell the **mb128** which sector is being processed. As the **mb128** can stored up to **128KB**, there are **256** (`0x100`) available sectors. The sequence sent is similar to the one sent for a boot sequence (`mb128_boot`).
+```c
+void mb128_sector_addr(bool rw, byte sector_id) {
+    mb128_send_bit( rw );               // 1: read or 0: write
+
+    mb128_send_bit( 0 );                // send sector address
+    mb128_send_bit( 0 );
+
+    mb128_send_byte( sector_id );
+
+    mb128_send_byte( 0x00 );
+    mb128_send_byte( 0x10 );           // 512 bytes will be read/write
+
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+    mb128_send_bit( 0 );
+}
+```
+The 1st bit tells if we will be reading or writing. Next is the sector address on 10 bits. It's expressed in 128 bytes chunk. It is followed by 3 bits. Their meaning is still unknown. Finally comes the number of bytes to read or write encoded son 17 bits.
+```c
+void mb128_sector_addr(bool rw, word address, byte unknown, dword length) {
+    mb128_send_bit( rw );               // 1: read or 0: write
+
+    for(int i=0; i<10; i++) {           // address (LSB firsts)
+        mb128_send_bit( (address >> i) & 1 ); 
+    }
+
+    for(int i=0; i<3; i++) {            // unknown bits
+        mb128_send_bit( (unknown >> i) & 1 );
+    }
+
+    for(int i=0; i<17; i++) {           // length (LSB first)
+        mb128_send_bit( (length >> i) & 1 );
+    }
+}
+```
+
 Once the sector address is set byte can be read or written using `mb128_read` or `mb128_write`. A standard multi-sector read routine looks like this :
 ```c
-mb128_read_sectors:
-for( b=0; b<sector_count; b++ ) {
-    if( mb128_detect() == success ) {
-        mb128_sector_addr( sector + b );
-        for( i=0; i<512; i++ ) {
-            out[i] = mb128_read_byte();
-        }
+bool mb128_read_sector(byte sector, byte *buffer) {
+    if( mb128_reset() ) {
+        return false;
     }
+
+    mb128_sector_addr(true, sector);        // set sector address for reading
+
+    for(int i=0; i<512; i++) {              // read sector (512 bytes)
+        buffer[i] = mb128_read_byte();
+    }
+
+    return true;
+}
+
+bool mb128_read_sector_n(byte start, word num, byte *buffer) {
+    for(int i=0; i<num; i++) {
+        if(! mb128_read_sector(start+i, buffer) ) {
+            return false;
+        }
+        buffer += 512;
+    }
+    return true;
 }
 ```
-And similarly for a multi-sector write we have : 
-```c
-mb128_write_sectors:
-for( b=0; b<sector_count; b++ ) {
-    if( mb128_detect() == success ) {
-        mb128_sector_addr( sector + b );
-        for( i=0; i<512; i++ ) {
-            mb128_send_byte( in[i] );
-        }
-    }
-}
-```
+
+🚧 multi sector writes.
+
 ## Header format 🚧
 The first **2** sectors (**1024** bytes) of the **mb128** holds what can be describe as an entry list. Each entry is **16** bytes long. This means that the those sector can hold **64** entries.
 The first entry contains the header. It is organized as follow :
