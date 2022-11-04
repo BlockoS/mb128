@@ -1,14 +1,40 @@
 # Memory Base 128
 
 ## Description
-The **NEC Memory Base 128** (mb128 for short) is an external **PC-Engine** RAM backup unit that plugs between the joypad port and the joypad itself. It can stores up to **128 KB**, which is **64** times more than the standard backup units (**Tennokoe 2** or **Duo** internal BRAM). Just like the **Tennokoe 2**, the **mb128** needs to be powered by external batteries (4 AA) in order to retain data. It is built around the **MSM6389C** from **OKI Semiconductor**, a **1048576 x 1bit** solid-state data register.
+The **NEC Memory Base 128** is an external **PC-Engine** RAM backup unit that plugs between the joypad port and the joypad itself. It can stores up to **128 KB**, which is **64** times more than the standard backup units (**Tennokoe 2** or **Duo** internal BRAM). Just like the **Tennokoe 2**, the **mb128** needs to be powered by external batteries (4 AA) in order to retain data. It is built around the **MSM6389C** from **OKI Semiconductor**, a **1048576 x 1bit** solid-state data register.
 This means that data is transferred **1 bit at a time**.
 
-Note that **Koei** released a similar device (if not a clone), the **Save Kun**.
+**Koei** released a similar device (if not a clone), the **Save Kun**.
+
+## Compatibility List
+  * A. III - Takin' the A Train [ADCD3001]
+  * Atlas Renaissance Voyage [ADCD4002]
+  * Bishoujo Senshi Sailor Moon Collection [BACD4004]
+  * Brandish [HECD4007]
+  * Eikan ha Kimini - Koukou Yakyuu Zenkoku Taikai [ADCD4003]
+  * Emerald Dragon [HECD3005]
+  * Fire Pro Jyoshi - Dome Choujyo Taisen [HMCD4008]
+  * Ganchouhishi - Aoki Ookami to Shiroki Mejika [KOCD3004]
+  * Linda Cube [HECD5023]
+  * Magicoal [HECD3002]
+  * Mahojng Sword Princess Quest Gaiden [NXCD4031]
+  * Nobunaga no Yabou - Bushou Fuuunroku [KOCD2001]
+  * Nobunaga no Yabou Zenkokuban [KOCD3005]
+  * Popful Mail [HECD4011]
+  * Princess Maker 2 [HECD5020]
+  * Private Eye Dol [HECD5019]
+  * Sankokushi III [KOCD3003]
+  * Shin Megami Tensei [ATCD3006]
+  * Super Mahjong Taikai [KOCD2002]
+  * Super Real Mahjong P II - P III Custom [NXCD4030]
+  * Super Real Mahjong P V Custom [NXCD5032]
+  * Tadaima Yuusha Boshuuchuu [HMCD3006]
+  * Vasteel 2 [HMCD4007]
 
 ## Basic operations
-As the **mb128** is plugged into the joyport, communication is done through the joypad control port (**$1000**).
-Without further ado, here is how to send a bit to the **mb128**. At this point the bit may not be stored. There is a bit of protocol to respect before getting
+As the Memory Base 128 is plugged into the joyport, communication is done through the joypad control port (**$1000**). 
+
+Without further ado, here is how to send a bit to the Memory Base 128. At this point the bit may not be stored. There is a bit of protocol to respect before getting
 anything written on the **MSM6389C** (more on this later).
 In the following routine the A register holds the bit (0 or 1) to be sent. If
 you have ever looked at a joypad routine, you will recognize the classic delays
@@ -36,7 +62,7 @@ mb128_send_bit:
     rts
 ```
 
-A byte is transferred by sending each bit separately starting from bit **0** to bit **7**. This can easily be done by repeatedly shifting the value to the right and sending the carry flag to the **mb128**. This can be translated in the following C-like pseudo-code.
+A byte is transferred by sending each bit separately starting from bit **0** to bit **7**. This can easily be done by repeatedly shifting the value to the right and sending the carry flag to the Memory Base 128. This can be translated in the following C-like pseudo-code.
 ```c
 void mb128_send_byte(byte a) {
     for(int i=0; i<8; i++) {
@@ -79,7 +105,7 @@ byte mb128_read_byte() {
 ```
 
 ## Detection
-The following sequence let you detect the presence of a **mb128**.
+The following sequence let you detect the presence of a Memory Base 128.
 ```c
 bool mb128_detect() {
     for(int i=0; i<4; i++) {            // we'll make 4 attempts
@@ -106,7 +132,7 @@ bool mb128_detect() {
     return false;
 }
 ```
-A **mb128** is plugged to the joyport if **res** is equal to **4**. Some games make **3** attempts before calling it quits
+A Memory Base 128 is plugged to the joyport if **res** is equal to **4**. Some games make **3** attempts before calling it quits
 
 ## Boots
 
@@ -133,7 +159,7 @@ void mb128_boot() {
     mb128_send_bit( 0 );
 }
 ```
-Once `mb128_detect` and `mb128_boot` are performed, you can safely read or write data to the **mb128** storage.
+Once `mb128_detect` and `mb128_boot` are performed, you can safely read or write data to the Memory Base 128 storage.
 We'll call this `mb128_reset`, and it usually looks like this:
 ```c
 bool mb128_reset() {
@@ -153,7 +179,7 @@ bool mb128_reset() {
 
 ## Sector read/write
 All games studied store or retrieve data by blocs of **512** bytes. We will call it a sector.
-The first thing to do is to tell the **mb128** which sector is being processed. As the **mb128** can stored up to **128KB**, there are **256** (`0x100`) available sectors. The sequence sent is similar to the one sent for a boot sequence (`mb128_boot`).
+The first thing to do is to tell the Memory Base 128 which sector is being processed. As the Memory Base 128 can stored up to **128KB**, there are **256** (`0x100`) available sectors. The sequence sent is similar to the one sent for a boot sequence (`mb128_boot`).
 ```c
 void mb128_sector_addr(bool rw, byte sector_id) {
     mb128_send_bit( rw );               // 1: read or 0: write
@@ -279,8 +305,8 @@ The format of the data stored is not standardized. This means that they are
 game dependent. For example, it seems that **Tadaima Yusha Boshuuchuu** is using the **mb128** as an extra **BRAM**. On the other hand, **Shin Megami Tensei** has its own internal format.
 
 ## Thanks 🚧
-David Shadoff
-Elmer
+  * David Shadoff
+  * Elmer
 
 ## Contact
 mooz at blockos dot org
