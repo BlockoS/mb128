@@ -99,16 +99,17 @@ byte mb128_read_byte() {
 }
 ```
 
-## Detection
-At startup, the Memory Base 128 is in pass-through or joypad mode. The bit sequence **00010101** (or **A8** in hex) must be sent in order to switch mode and access the Memory Base 128 storage. The device will respond by setting **D2**.
+## Init
+At startup, the Memory Base 128 is in pass-through or joypad mode. The bit sequence **00010101** (or **A8** in hex) must be sent in order to switch mode and access the Memory Base 128 storage. Once it is sent, 2 **ident** bits must be sent and read back from the joyport. The value read will determine if the Memory Base 128 switch was successful.
 Note that when the Memory Base 128 is active, the joypad (or any device plugged to it) is ignored.
 
 ```c
-bool mb128_detect() {
+bool mb128_init() {
     for(int i=0; i<4; i++) {            // we'll make 4 attempts
         byte ret;
         
         mb128_send_byte( 0xA8 );
+        
         mb128_send_bit( 0 );
         
         ret = (joyport & 0x05) << 4;
@@ -131,123 +132,139 @@ bool mb128_detect() {
 ```
 
 ## Commands
+After **A8** detection sequence, the Memory Base 128 expects to receive either a read or write command described as follows.
+| Sequence | Number of bits | Description |
+|---|---|---|
+| 1 | 1 | request type (**0**: **write**, **1**: **read**) |
+| 2 | 10 | address |
+| 3 | 3 | bit length (__r__) |
+| 4 | 17 | byte length (__N__) |
+| 5 | 2 | trailing bits ⚠️ **write command only** |
+| 6 | 3 | trailing bits |
 
-🚧 format
+Data can now be read or written to the Memory Base 128. First the __N__ bytes are transfered followed by the __r__ remainder bits.
+Once the transfer is done, the Memory Base 128 returns to pass-through mode, allowing the joypad states to be read by the console.
 
-## Boot
-🚧 
-At startup just after detection, a special sequence is performed. It can be viewed as a boot/reset sequence.
+Knowing the command format, a single bit read command will be (still in pseudo code):
 ```c
-void mb128_boot() {
-    mb128_send_bit( 1 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
+int mb128_read_bit(uint16_t addr) { 
+    if(!mb128_init()) {
+        // There is no Memory Base 128.
+        return -1;
+    }
 
-    mb128_send_byte( 0x00 );
-    mb128_send_byte( 0x01 );
-    mb128_send_byte( 0x00 );
+    mb128_send_bit(1);          // read command
 
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
+    // address
+    for(int i=0; i<10; i++) {
+        mb128_send_bit((addr >> i) & 0x01);
+    }
+    
+    // bit size = 1
+    mb128_send_bit(1);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    
+    // 0 bytes
+    for(int i=0; i<17; i++) {
+        mb128_send_bit(0);
+    }
+    
+    // trailing bits
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
 
-    mb128_read_bit();
-
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-}
+    // read bit
+    return mb128_read_bit();
+}    
 ```
-Once `mb128_detect` and `mb128_boot` are performed, you can safely read or write data to the Memory Base 128 storage.
-We'll call this `mb128_reset`, and it usually looks like this:
+
+All games studied read or write data by chunks of 512 bytes. We will call it a sector.
+Single read sector will be: 
 ```c
-bool mb128_reset() {
-    int i;
-    for(i=0; i<8; i++) {
-        if(mb128_detect()) {
-            break;
-        }
+bool mb128_read_sector(uint16_t addr, uint8_t sector[512]) { 
+    if(!mb128_init()) {
+        // There is no Memory Base 128.
+        return -1;
     }
-    if(i == 8) {                        // failed to detect any mb128
-        return false;
+
+    mb128_send_bit(1);          // read command
+
+    // address
+    for(int i=0; i<10; i++) {
+        mb128_send_bit((addr >> i) & 0x01);
     }
-    mb128_boot();                       // issue the "boot" sequence and
+    
+    // bit size = 0
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    
+    // byte size = 512
+    mb128_send_byte(0);
+    mb128_send_byte(0x02);
+    mb128_send_bit(0)
+    
+    // trailing bits
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+
+    // read bit
+    for(int i=0; i<512; i++) {
+        sector[i] = mb128_read_bit();
+    }
+    
     return true;
-}
+}    
 ```
 
-## Sector read/write
-All games studied store or retrieve data by blocs of **512** bytes. We will call it a sector.
-The first thing to do is to tell the Memory Base 128 which sector is being processed. As the Memory Base 128 can stored up to **128KB**, there are **256** (`0x100`) available sectors. The sequence sent is similar to the one sent for a boot sequence (`mb128_boot`).
+Conversely, writing a sector will be:
 ```c
-void mb128_sector_addr(bool rw, byte sector_id) {
-    mb128_send_bit( rw );               // 1: read or 0: write
-
-    mb128_send_bit( 0 );                // send sector address
-    mb128_send_bit( 0 );
-
-    mb128_send_byte( sector_id );
-
-    mb128_send_byte( 0x00 );
-    mb128_send_byte( 0x10 );           // 512 bytes will be read/write
-
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-    mb128_send_bit( 0 );
-}
-```
-The 1st bit tells if we will be reading or writing. Next is the sector address on 10 bits. It's expressed in 128 bytes chunk. It is followed by 3 bits. Their meaning is still unknown. Finally comes the number of bytes to read or write encoded son 17 bits.
-```c
-void mb128_sector_addr(bool rw, word address, byte unknown, dword length) {
-    mb128_send_bit( rw );               // 1: read or 0: write
-
-    for(int i=0; i<10; i++) {           // address (LSB firsts)
-        mb128_send_bit( (address >> i) & 1 ); 
+bool mb128_write_sector(uint16_t addr, uint8_t sector[512]) { 
+    if(!mb128_init()) {
+        // There is no Memory Base 128.
+        return -1;
     }
 
-    for(int i=0; i<3; i++) {            // unknown bits
-        mb128_send_bit( (unknown >> i) & 1 );
+    mb128_send_bit(0);          // write command
+
+    // address
+    for(int i=0; i<10; i++) {
+        mb128_send_bit((addr >> i) & 0x01);
     }
+    
+    // bit size = 0
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    
+    // byte size = 512
+    mb128_send_byte(0);
+    mb128_send_byte(0x02);
+    mb128_send_bit(0)
 
-    for(int i=0; i<17; i++) {           // length (LSB first)
-        mb128_send_bit( (length >> i) & 1 );
+    // trailing bits (write only)
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+
+    // trailing bits
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+    mb128_send_bit(0);
+
+    // read bit
+    for(int i=0; i<512; i++) {
+        mb128_send_byte(sector[i]);
     }
-}
-```
-
-Once the sector address is set byte can be read or written using `mb128_read` or `mb128_write`. A standard multi-sector read routine looks like this :
-```c
-bool mb128_read_sector(byte sector, byte *buffer) {
-    if( mb128_reset() ) {
-        return false;
-    }
-
-    mb128_sector_addr(true, sector);        // set sector address for reading
-
-    for(int i=0; i<512; i++) {              // read sector (512 bytes)
-        buffer[i] = mb128_read_byte();
-    }
-
+    
     return true;
-}
-
-bool mb128_read_sector_n(byte start, word num, byte *buffer) {
-    for(int i=0; i<num; i++) {
-        if(! mb128_read_sector(start+i, buffer) ) {
-            return false;
-        }
-        buffer += 512;
-    }
-    return true;
-}
+}    
 ```
 
-🚧 multi sector writes.
-
-## Header format 🚧
-The first **2** sectors (**1024** bytes) of the **mb128** holds what can be describe as an entry list. Each entry is **16** bytes long. This means that the those sector can hold **64** entries.
+## Header format 
+The first **2** sectors (**1024** bytes) of the Memory Base 128 holds what can be describe as an entry list. Each entry is **16** bytes long. This means that the those sector can hold **64** entries.
 The first entry contains the header. It is organized as follow :
 
  offset | purpose 
@@ -302,7 +319,7 @@ Here are some examples :
 **Shin Megami Tensei** allows the player to have up to **10** save-states. Where **Tadaima Yusha Boshuuchuu** only allows **1** save-state.
 
 The format of the data stored is not standardized. This means that they are
-game dependent. For example, it seems that **Tadaima Yusha Boshuuchuu** is using the **mb128** as an extra **BRAM**. On the other hand, **Shin Megami Tensei** has its own internal format.
+game dependent. For example, it seems that **Tadaima Yusha Boshuuchuu** is using the Memory Base 128 as an extra **BRAM**. On the other hand, **Shin Megami Tensei** has its own internal format.
 
 ## Thanks 🚧
   * David Shadoff
