@@ -34,11 +34,8 @@ This means that data is transferred **1 bit at a time**.
 ## Basic operations
 As the Memory Base 128 is plugged into the joyport, communication is done through the joypad control port (**$1000**). 
 
-Without further ado, here is how to send a bit to the Memory Base 128. At this point the bit may not be stored. There is a bit of protocol to respect before getting
-anything written on the **MSM6389C** (more on this later).
-In the following routine the A register holds the bit (0 or 1) to be sent. If
-you have ever looked at a joypad routine, you will recognize the classic delays
-delay used in many games and in **MagicKit**.
+Without further ado, here is how to send a bit to the Memory Base 128. At this point the bit may not be stored. There is a bit of protocol to respect before getting anything written on the **MSM6389C** (more on this later).
+In the following routine the A register holds the bit (0 or 1) to be sent. If you have ever looked at a joypad routine, you will recognize the classic delays used in many games and in **MagicKit**.
 ```
 mb128_send_bit:
     and #$01
@@ -91,21 +88,21 @@ mb128_read_bit:
     rts
 ```
 
-Reading a byte is done just like its counterpart. A byte is read by performing
-**8** consecutive bit read and pushing the bit using left shift.
+Reading a byte is done just like its counterpart. A byte is read by performing **8** consecutive bit reads.
 ```c
 byte mb128_read_byte() {
     byte acc = 0;
     for(int i=0; i<8; i++) {
-        acc <<= 1;
-        acc |= mb128_read_bit();
+        acc |= mb128_read_bit() << i;
     }
     return acc;
 }
 ```
 
 ## Detection
-The following sequence let you detect the presence of a Memory Base 128.
+At startup, the Memory Base 128 is in pass-through or joypad mode. The bit sequence **00010101** (or **A8** in hex) must be sent in order to switch mode and access the Memory Base 128 storage. The device will respond by setting **D2**.
+Note that when the Memory Base 128 is active, the joypad (or any device plugged to it) is ignored.
+
 ```c
 bool mb128_detect() {
     for(int i=0; i<4; i++) {            // we'll make 4 attempts
@@ -132,10 +129,13 @@ bool mb128_detect() {
     return false;
 }
 ```
-A Memory Base 128 is plugged to the joyport if **res** is equal to **4**. Some games make **3** attempts before calling it quits
 
-## Boots
+## Commands
 
+🚧 format
+
+## Boot
+🚧 
 At startup just after detection, a special sequence is performed. It can be viewed as a boot/reset sequence.
 ```c
 void mb128_boot() {
