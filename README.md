@@ -134,7 +134,7 @@ bool mb128_init() {
 ## Commands
 After **A8** detection sequence, the Memory Base 128 expects to receive either a read or write command described as follows.
 | Sequence | Number of bits | Description |
-|---|---|---|
+|---:|---:|:---|
 | 1 | 1 | request type (**0**: **write**, **1**: **read**) |
 | 2 | 10 | address |
 | 3 | 3 | bit length (__r__) |
@@ -285,8 +285,8 @@ Next comes the savegame entries.
 -:|:-
  0 | sector number
  1 | sector count
- 2 | unknown (0x00)
- 3 | unknown (0x02)
+ 2 | last sector used bytes count (lsb)
+ 3 | last sector used bytes count (msb)
  4 | CRC (lsb)
  5 | CRC (msb)
  6 | unknown (0x00)
@@ -295,21 +295,20 @@ Next comes the savegame entries.
  . |
  f | Last entry name char (0x00)
 
-The first **2** bytes tell where the data is stored (sector number) and how many sectors are used. The meaning of bytes **2**, **3**, **4** and **5** is unknown. None of the game studied are using them, but they all store the same values. That is **0x00** and **0x02** for bytes **2** and **3**, and **0x00** for both bytes **6** and **7**. 
+The first **2** bytes tell where the data is stored (sector number) and how many sectors are used. The meaning of bytes **6** and **7** is unknown. None of the game studied are using them, but they all set those bytes at **0** .
 
-The **CRC** is sum of the stored bytes. This can be translated in the following 
+The **CRC** is simply the sum of all stored bytes. This can be translated in the following 
 pseudo-C code.
 ```c
-u8  out[ sector_count * 512 ]; 
+u16 size = (sector_count-1) * 512 + last_sector_used_bytes;
+u8  out[ size ]; 
 u16 crc = 0;
 
-mb128_read( sector, sector_count );
+mb128_read( sector_number, size );
 
-for( i=0; i<sector_count; i++ ) {
-    for( j=0; j<512; j++ ) {
-        crc += out[ (i*512) + j ];
-    }
-}  
+for( i=0; i<size; i++ ) {
+    crc += out[ i ];
+}
 ```
 The entry name is a **8** bytes string. It is supposed to be unique allowing games to retrieve their data.
 Here are some examples :
@@ -321,7 +320,7 @@ Here are some examples :
 The format of the data stored is not standardized. This means that they are
 game dependent. For example, it seems that **Tadaima Yusha Boshuuchuu** is using the Memory Base 128 as an extra **BRAM**. On the other hand, **Shin Megami Tensei** has its own internal format.
 
-## Thanks 🚧
+## Thanks
   * David Shadoff
   * Elmer
 
